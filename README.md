@@ -24,12 +24,23 @@ vcpkg/bootstrap-vcpkg.sh
 vcpkg/vcpkg install
 ```
 
+Additionally, to have an easier time getting language servers to work with your IDE/editor, install *bear* via your package manager.
+
 # Compile
 
 ChampSim takes a JSON configuration script. Examine `champsim_config.json` for a fully-specified example. All options described in this file are optional and will be replaced with defaults if not specified. The configuration scrip can also be run without input, in which case an empty file is assumed.
 ```
 $ ./config.sh <configuration file>
-$ make
+```
+If this is your first time compiling, or if you've added new source files, run
+```
+bear -- make
+```
+To also generate the compiler_commands.json to be used by your language server.
+
+Otherwise, simply run 
+```
+make
 ```
 
 # Download DPC-3 trace
