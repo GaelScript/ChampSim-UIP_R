@@ -42,6 +42,11 @@ Otherwise, simply run
 ```
 make
 ```
+and 
+```
+make compile_commands
+```
+to use the ChampSim developers' methods to make a compile_commands.json file. (Functionality seems limited; does not work on my WSL2 Ubuntu instance when testing with VSCode Intellisense or Cursor's clangd.)
 
 # Download DPC-3 trace
 
