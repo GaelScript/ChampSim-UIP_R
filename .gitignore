@@ -28,5 +28,7 @@ absolute.options
 .cache/
 compile_commands.json
 
+649.fotonik3d_s-1B.champsimtrace.xz
+
 .vscode/
 **/.DS_Store

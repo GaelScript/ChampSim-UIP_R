@@ -1,0 +1,77 @@
+==60124== Memcheck, a memory error detector
+==60124== Copyright (C) 2002-2024, and GNU GPL'd, by Julian Seward et al.
+==60124== Using Valgrind-3.25.1 and LibVEX; rerun with -h for copyright info
+==60124== Command: ./bin/champsim_bypass --warmup-instructions 200000 --simulation-instructions 500000 /home/navi/Dev/ChampSim-UIP_R/649.fotonik3d_s-1B.champsimtrace.xz
+==60124== 
+==60124== Invalid read of size 8
+==60124==    at 0x40CAADD: bypass::~bypass() (in /home/navi/Dev/ChampSim-UIP_R/bin/champsim_bypass)
+==60124==    by 0x4061257: CACHE::replacement_module_model<bypass>::~replacement_module_model() (in /home/navi/Dev/ChampSim-UIP_R/bin/champsim_bypass)
+==60124==    by 0x403A0BC: CACHE::~CACHE() (in /home/navi/Dev/ChampSim-UIP_R/bin/champsim_bypass)
+==60124==    by 0x4079DCF: champsim::configured::generated_environment<15561010120091588029ull>::~generated_environment() (in /home/navi/Dev/ChampSim-UIP_R/bin/champsim_bypass)
+==60124==    by 0x4028BA2: main (in /home/navi/Dev/ChampSim-UIP_R/bin/champsim_bypass)
+==60124==  Address 0xc531d20 is 1,223,264 bytes inside an unallocated block of size 1,230,368 in arena "client"
+==60124== 
+==60124== Invalid read of size 8
+==60124==    at 0x40CAAE7: bypass::~bypass() (in /home/navi/Dev/ChampSim-UIP_R/bin/champsim_bypass)
+==60124==    by 0x4061257: CACHE::replacement_module_model<bypass>::~replacement_module_model() (in /home/navi/Dev/ChampSim-UIP_R/bin/champsim_bypass)
+==60124==    by 0x403A0BC: CACHE::~CACHE() (in /home/navi/Dev/ChampSim-UIP_R/bin/champsim_bypass)
+==60124==    by 0x4079DCF: champsim::configured::generated_environment<15561010120091588029ull>::~generated_environment() (in /home/navi/Dev/ChampSim-UIP_R/bin/champsim_bypass)
+==60124==    by 0x4028BA2: main (in /home/navi/Dev/ChampSim-UIP_R/bin/champsim_bypass)
+==60124==  Address 0xc531d70 is 1,223,344 bytes inside an unallocated block of size 1,230,368 in arena "client"
+==60124== 
+==60124== Invalid read of size 8
+==60124==    at 0x40CAB31: bypass::~bypass() (in /home/navi/Dev/ChampSim-UIP_R/bin/champsim_bypass)
+==60124==    by 0x4061257: CACHE::replacement_module_model<bypass>::~replacement_module_model() (in /home/navi/Dev/ChampSim-UIP_R/bin/champsim_bypass)
+==60124==    by 0x403A0BC: CACHE::~CACHE() (in /home/navi/Dev/ChampSim-UIP_R/bin/champsim_bypass)
+==60124==    by 0x4079DCF: champsim::configured::generated_environment<15561010120091588029ull>::~generated_environment() (in /home/navi/Dev/ChampSim-UIP_R/bin/champsim_bypass)
+==60124==    by 0x4028BA2: main (in /home/navi/Dev/ChampSim-UIP_R/bin/champsim_bypass)
+==60124==  Address 0xc531d78 is 1,223,352 bytes inside an unallocated block of size 1,230,368 in arena "client"
+==60124== 
+==60124== Invalid free() / delete / delete[] / realloc()
+==60124==    at 0x49E58DD: operator delete(void*, unsigned long) (vg_replace_malloc.c:1181)
+==60124==    by 0x40CAB4B: bypass::~bypass() (in /home/navi/Dev/ChampSim-UIP_R/bin/champsim_bypass)
+==60124==    by 0x4061257: CACHE::replacement_module_model<bypass>::~replacement_module_model() (in /home/navi/Dev/ChampSim-UIP_R/bin/champsim_bypass)
+==60124==    by 0x403A0BC: CACHE::~CACHE() (in /home/navi/Dev/ChampSim-UIP_R/bin/champsim_bypass)
+==60124==    by 0x4079DCF: champsim::configured::generated_environment<15561010120091588029ull>::~generated_environment() (in /home/navi/Dev/ChampSim-UIP_R/bin/champsim_bypass)
+==60124==    by 0x4028BA2: main (in /home/navi/Dev/ChampSim-UIP_R/bin/champsim_bypass)
+==60124==  Address 0xc531d70 is 1,223,344 bytes inside an unallocated block of size 1,230,368 in arena "client"
+==60124== 
+==60124== Invalid read of size 8
+==60124==    at 0x40CAB4C: bypass::~bypass() (in /home/navi/Dev/ChampSim-UIP_R/bin/champsim_bypass)
+==60124==    by 0x4061257: CACHE::replacement_module_model<bypass>::~replacement_module_model() (in /home/navi/Dev/ChampSim-UIP_R/bin/champsim_bypass)
+==60124==    by 0x403A0BC: CACHE::~CACHE() (in /home/navi/Dev/ChampSim-UIP_R/bin/champsim_bypass)
+==60124==    by 0x4079DCF: champsim::configured::generated_environment<15561010120091588029ull>::~generated_environment() (in /home/navi/Dev/ChampSim-UIP_R/bin/champsim_bypass)
+==60124==    by 0x4028BA2: main (in /home/navi/Dev/ChampSim-UIP_R/bin/champsim_bypass)
+==60124==  Address 0xc531d10 is 1,223,248 bytes inside an unallocated block of size 1,230,368 in arena "client"
+==60124== 
+==60124== Invalid free() / delete / delete[] / realloc()
+==60124==    at 0x49E58DD: operator delete(void*, unsigned long) (vg_replace_malloc.c:1181)
+==60124==    by 0x40CAB66: bypass::~bypass() (in /home/navi/Dev/ChampSim-UIP_R/bin/champsim_bypass)
+==60124==    by 0x4061257: CACHE::replacement_module_model<bypass>::~replacement_module_model() (in /home/navi/Dev/ChampSim-UIP_R/bin/champsim_bypass)
+==60124==    by 0x403A0BC: CACHE::~CACHE() (in /home/navi/Dev/ChampSim-UIP_R/bin/champsim_bypass)
+==60124==    by 0x4079DCF: champsim::configured::generated_environment<15561010120091588029ull>::~generated_environment() (in /home/navi/Dev/ChampSim-UIP_R/bin/champsim_bypass)
+==60124==    by 0x4028BA2: main (in /home/navi/Dev/ChampSim-UIP_R/bin/champsim_bypass)
+==60124==  Address 0xc531d10 is 1,223,248 bytes inside an unallocated block of size 1,230,368 in arena "client"
+==60124== 
+==60124== 
+==60124== HEAP SUMMARY:
+==60124==     in use at exit: 163,840 bytes in 256 blocks
+==60124==   total heap usage: 25,898,838 allocs, 25,898,584 frees, 1,726,263,324 bytes allocated
+==60124== 
+==60124== 163,840 bytes in 256 blocks are definitely lost in loss record 1 of 1
+==60124==    at 0x49E3613: operator new[](unsigned long) (vg_replace_malloc.c:729)
+==60124==    by 0x40CBF19: sdbp_sampler::sdbp_sampler(int, int) (in /home/navi/Dev/ChampSim-UIP_R/bin/champsim_bypass)
+==60124==    by 0x40CD307: bypass::bypass(CACHE*, long, long) (in /home/navi/Dev/ChampSim-UIP_R/bin/champsim_bypass)
+==60124==    by 0x4067F0D: auto champsim::configured::build<CACHE, champsim::cache_builder<champsim::cache_builder_module_type_holder<no>, champsim::cache_builder_module_type_holder<bypass> >, champsim::cache_builder<champsim::cache_builder_module_type_holder<no>, champsim::cache_builder_module_type_holder<lru> >, champsim::cache_builder<champsim::cache_builder_module_type_holder<no>, champsim::cache_builder_module_type_holder<lru> >, champsim::cache_builder<champsim::cache_builder_module_type_holder<no>, champsim::cache_builder_module_type_holder<lru> >, champsim::cache_builder<champsim::cache_builder_module_type_holder<no>, champsim::cache_builder_module_type_holder<lru> >, champsim::cache_builder<champsim::cache_builder_module_type_holder<no>, champsim::cache_builder_module_type_holder<lru> >, champsim::cache_builder<champsim::cache_builder_module_type_holder<no>, champsim::cache_builder_module_type_holder<lru> > >(champsim::cache_builder<champsim::cache_builder_module_type_holder<no>, champsim::cache_builder_module_type_holder<bypass> >, champsim::cache_builder<champsim::cache_builder_module_type_holder<no>, champsim::cache_builder_module_type_holder<lru> >, champsim::cache_builder<champsim::cache_builder_module_type_holder<no>, champsim::cache_builder_module_type_holder<lru> >, champsim::cache_builder<champsim::cache_builder_module_type_holder<no>, champsim::cache_builder_module_type_holder<lru> >, champsim::cache_builder<champsim::cache_builder_module_type_holder<no>, champsim::cache_builder_module_type_holder<lru> >, champsim::cache_builder<champsim::cache_builder_module_type_holder<no>, champsim::cache_builder_module_type_holder<lru> >, champsim::cache_builder<champsim::cache_builder_module_type_holder<no>, champsim::cache_builder_module_type_holder<lru> >) (in /home/navi/Dev/ChampSim-UIP_R/bin/champsim_bypass)
+==60124==    by 0x405FFA3: champsim::configured::generated_environment<15561010120091588029ull>::generated_environment() (in /home/navi/Dev/ChampSim-UIP_R/bin/champsim_bypass)
+==60124==    by 0x40277F4: main (in /home/navi/Dev/ChampSim-UIP_R/bin/champsim_bypass)
+==60124== 
+==60124== LEAK SUMMARY:
+==60124==    definitely lost: 163,840 bytes in 256 blocks
+==60124==    indirectly lost: 0 bytes in 0 blocks
+==60124==      possibly lost: 0 bytes in 0 blocks
+==60124==    still reachable: 0 bytes in 0 blocks
+==60124==         suppressed: 0 bytes in 0 blocks
+==60124== 
+==60124== For lists of detected and suppressed errors, rerun with: -s
+==60124== ERROR SUMMARY: 7 errors from 7 contexts (suppressed: 0 from 0)

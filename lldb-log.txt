@@ -1,0 +1,47 @@
+(lldb) target create "./bin/champsim_bypass"
+Current executable set to '/Users/lain/Dev/ChampSim-UIP_R/bin/champsim_bypass' (arm64).
+(lldb) settings set -- target.run-args  "--warmup-instructions" "2000000" "--simulation-instructions" "5000000" "/Users/lain/Dev/ChampSim-UIP_R/400.perlbench-41B.champsimtrace.xz"
+(lldb) run
+[VMEM] WARNING: physical memory size is smaller than virtual memory size.
+You are modeling a DM LLC
+Number of sets 32768 -> 
+config 1, num_core 1, llc_sets 32768
+@32768 $\times$ 15 = 491520 plru bits
+@32768 lastmiss bits
+@table 0: 6 $\times$ 256 = 1536 bits
+@table 1: 6 $\times$ 256 = 1536 bits
+@table 2: 6 $\times$ 4 = 24 bits
+@table 3: 6 $\times$ 256 = 1536 bits
+@table 4: 6 $\times$ 256 = 1536 bits
+@table 5: 6 $\times$ 4 = 24 bits
+@table 6: 6 $\times$ 2 = 12 bits
+@table 7: 6 $\times$ 4 = 24 bits
+@37 trace bits for global trace buffer
+@66 $\times$ 8 $\times$ 256 = 135168 bits for sampler
+@18 $\times$ 16 $\times$ 1 = 288 bits for the per-core address arrays
+@can afford -508 samplers
+@total bytes 83316
+
+*** ChampSim Multicore Out-of-Order Simulator ***
+Warmup Instructions: 2000000
+Simulation Instructions: 5000000
+Number of CPUs: 1
+Page size: 4096
+
+Off-chip DRAM Size: 16 GiB Channels: 1 Width: 64-bit Data Rate: 3205 MT/s
+Warmup finished CPU 0 instructions: 2000002 cycles: 546057 cumulative IPC: 3.663 (Simulation time: 00 hr 00 min 02 sec)
+Warmup complete CPU 0 instructions: 2000002 cycles: 546057 cumulative IPC: 3.663 (Simulation time: 00 hr 00 min 02 sec)
+warning: champsim_bypass was compiled with optimization - stepping may behave oddly; variables may not be available.
+Process 34324 launched: '/Users/lain/Dev/ChampSim-UIP_R/bin/champsim_bypass' (arm64)
+Process 34324 stopped
+* thread #1, queue = 'com.apple.main-thread', stop reason = EXC_BAD_ACCESS (code=1, address=0x0)
+    frame #0: 0x0000000100076a70 champsim_bypass`bypass::Get_Sampler_Victim(this=0x00000001007df2c8, tid=<unavailable>, setIndex=<unavailable>, current_set=<unavailable>, assoc=<unavailable>, PC=<unavailable>, paddr=<unavailable>, accessType=<unavailable>) at bypass.cc:638:22 [opt]
+   635 	    make_trace(tid, samp->pred, setIndex, PC, tag, accessType, false, true, 
+   636 	               lastmiss_bits[setIndex], paddr & 63);
+   637 	    
+-> 638 	    int conf = samp->pred->get_prediction(tid, setIndex);
+    	                     ^
+   639 	    
+   640 	    if (conf > dan_bypass_threshold) r = 1;
+   641 	    
+Target 0: (champsim_bypass) stopped.
