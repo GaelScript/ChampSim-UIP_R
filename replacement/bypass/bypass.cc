@@ -7,53 +7,18 @@
 #include <utility>
 #include <vector>
 #include <cstring>
+#include <memory>
 
 #include "cache.h"
 #include "msl/bits.h"
 
 using namespace std;
 
-// Global parameters
-static int 
-	dan_promotion_threshold = 256,
-	dan_init_weight = 1,
-	dan_dt1 = 55, dan_dt2 = 1024,
-	dan_rrip_place_position = 0,
-	dan_leaders = 34,
-	dan_ignore_prefetch = 1,
-	dan_use_plru = 0,
-	dan_use_rrip = 0,
-	dan_bypass_threshold = 1000,
-	dan_record_types = 27,
-	dan_sampler_assoc = 18,
-	dan_predictor_index_bits = 8,
-	dan_predictor_tables = 16,
-	dan_counter_width = 6,
-	dan_threshold = 8,
-	dan_theta2 = 210,
-	dan_theta = 110,
-	dan_sampler_tag_bits = 16,
-	dan_samplers = 80,
-	dan_predictor_table_entries,
-	dan_counter_min,
-	dan_counter_max;
-
 #define LLC_WAYS 1
 #define	LLC_WAY	 1
 #define MAX_PATH_LENGTH 16
 
 static bool verbose = true;
-static int total_bits = 0;
-
-// trace is built here before prediction
-static unsigned int trace_buffer[MAX_PATH_LENGTH+1];
-
-// placement vector (initialized elsewhere)
-int plv[3][2] = {
-	{ 0, 0 },
-	{ 0, 0 },
-	{ 0, 0 },
-};
 
 // feature types
 #define F_PC    0
@@ -82,7 +47,7 @@ struct feature_spec {
 
 static feature_spec input_specs[MAX_SPECS];
 
-static void read_specs (FILE *f) {
+void bypass::read_specs(FILE *f) {
 	char s[1000];
 	assert (fgets (s, 1000, f)); sscanf (s, "%d", &dan_theta);
 	if (s[0] == '[') {
@@ -206,8 +171,6 @@ static feature_spec default_multi_4_specs[] = {
 { F_PC, 11, 7, 23, 0, 2 },
 };
 
-static feature_spec *specs = NULL;
-
 // one sampler entry
 struct sdbp_sampler_entry {
 	unsigned int 	
@@ -220,31 +183,32 @@ struct sdbp_sampler_entry {
 	sdbp_sampler_entry (void) {
 		lru_stack_position = 0;
 		tag = 0;
+        conf = 0;
+        memset(trace_buffer, 0, sizeof(trace_buffer));
 	};
 };
 
 struct sdbp_sampler_set {
-	sdbp_sampler_entry *blocks;
-	sdbp_sampler_set (void);
+	std::vector<sdbp_sampler_entry> blocks;
 };
 
 struct perceptron_predictor {
-        int **tables;
-        int *table_sizes;
+        std::vector<std::vector<int>> tables;
+        std::vector<int> table_sizes;
+        bypass* parent;
 
-        perceptron_predictor (void);
-        ~perceptron_predictor();
+        perceptron_predictor (bypass* b);
         int get_prediction (uint32_t tid, int set);
         void block_is_dead (uint32_t tid, sdbp_sampler_entry *, unsigned int *, bool, int, int);
 };
 
 struct sdbp_sampler {
-        sdbp_sampler_set *sets;
+        std::vector<sdbp_sampler_set> sets;
         int nsampler_sets;
+        bypass* parent;
 
-        perceptron_predictor *pred;
-        sdbp_sampler (int nsets, int assoc);
-        ~sdbp_sampler();
+        std::unique_ptr<perceptron_predictor> pred;
+        sdbp_sampler (int nsets, int assoc, bypass* b);
         void access (uint32_t tid, int set, int real_set, uint64_t tag, uint64_t PC, int, uint64_t);
 };
 
@@ -280,6 +244,8 @@ bypass::bypass(CACHE* cache, long sets, long ways)
     // Set parameters based on config
     set_parameters();
     
+    int total_bits = 0;
+
 #if ( LLC_WAYS == 1 )
     printf("You are modeling a DM LLC\n");
     dan_sampler_assoc = 8;
@@ -338,7 +304,7 @@ bypass::bypass(CACHE* cache, long sets, long ways)
     total_bits += llc_sets;
     
     // Initialize sampler
-    samp = new sdbp_sampler(llc_sets, NUM_WAY);
+    samp = std::make_unique<sdbp_sampler>(llc_sets, NUM_WAY, this);
     
     // Compute sizes
     int trace_bits = 0;
@@ -389,12 +355,9 @@ bypass::bypass(CACHE* cache, long sets, long ways)
     leaders2 = dan_leaders * 2;
 }
 
-bypass::~bypass()
-{
-    if (samp) {
-        delete samp;
-    }
-}
+bypass::~bypass() = default;
+bypass::bypass(bypass&&) = default;
+bypass& bypass::operator=(bypass&&) = default;
 
 void bypass::set_parameters(void) {
     switch (config) {
@@ -590,7 +553,7 @@ void bypass::UpdateSampler(uint32_t setIndex, uint64_t tag, uint32_t tid, uint64
             // update_plru_mdpp would go here
         }
         
-        make_trace(tid, samp->pred, setIndex, PC, tag, accessType, was_burst, !hit, 
+        make_trace(tid, samp->pred.get(), setIndex, PC, tag, accessType, was_burst, !hit, 
                    lastmiss_bits[setIndex], paddr & 63);
         
         int conf = samp->pred->get_prediction(tid, setIndex);
@@ -632,7 +595,7 @@ int bypass::Get_Sampler_Victim(uint32_t tid, uint32_t setIndex, uint32_t current
     if (access_type{accessType} == access_type::WRITE) return 0;
     
     uint32_t tag = paddr / (llc_sets * 64);
-    make_trace(tid, samp->pred, setIndex, PC, tag, accessType, false, true, 
+    make_trace(tid, samp->pred.get(), setIndex, PC, tag, accessType, false, true, 
                lastmiss_bits[setIndex], paddr & 63);
     
     int conf = samp->pred->get_prediction(tid, setIndex);
@@ -686,18 +649,15 @@ void bypass::update_replacement_state(uint32_t triggering_cpu, long set, long wa
 
 // ==================== Sampler implementation ====================
 
-sdbp_sampler_set::sdbp_sampler_set(void) {
-    blocks = new sdbp_sampler_entry[dan_sampler_assoc];
-    for (int i = 0; i < dan_sampler_assoc; i++)
-        blocks[i].lru_stack_position = i;
-}
-
 void sdbp_sampler::access(uint32_t tid, int set, int real_set, uint64_t tag, uint64_t PC, int accessType, uint64_t paddr) {
+    if (set >= sets.size()) return;
     sdbp_sampler_entry *blocks = &sets[set].blocks[0];
-    unsigned int partial_tag = tag & ((1 << dan_sampler_tag_bits) - 1);
+    unsigned int partial_tag = tag & ((1 << parent->dan_sampler_tag_bits) - 1);
     
     int i;
-    for (i = 0; i < dan_sampler_assoc; i++) 
+    int assoc = parent->dan_sampler_assoc;
+
+    for (i = 0; i < assoc; i++) 
         if (blocks[i].tag == partial_tag) {
             pred->block_is_dead(tid, &blocks[i], blocks[i].trace_buffer, false, 
                                blocks[i].conf, blocks[i].lru_stack_position);
@@ -705,20 +665,20 @@ void sdbp_sampler::access(uint32_t tid, int set, int real_set, uint64_t tag, uin
         }
     
     bool is_fill = false;
-    if (i == dan_sampler_assoc) {
+    if (i == assoc) {
         int j;
-        for (j = 0; j < dan_sampler_assoc; j++)
-            if (blocks[j].lru_stack_position == (unsigned int)(dan_sampler_assoc - 1)) break;
-        assert(j < dan_sampler_assoc);
+        for (j = 0; j < assoc; j++)
+            if (blocks[j].lru_stack_position == (unsigned int)(assoc - 1)) break;
+        assert(j < assoc);
         i = j;
         
         pred->block_is_dead(tid, &blocks[i], blocks[i].trace_buffer, true, 
-                           blocks[i].conf, dan_sampler_assoc);
+                           blocks[i].conf, assoc);
         is_fill = true;
     }
     
     unsigned int position = blocks[i].lru_stack_position;
-    for (int way = 0; way < dan_sampler_assoc; way++) {
+    for (int way = 0; way < assoc; way++) {
         if (blocks[way].lru_stack_position < position) {
             blocks[way].lru_stack_position++;
             pred->block_is_dead(tid, &blocks[way], blocks[way].trace_buffer, true, 
@@ -732,55 +692,53 @@ void sdbp_sampler::access(uint32_t tid, int set, int real_set, uint64_t tag, uin
     }
     
     // Record the trace
-    // Access bypass member function through instance
-    // We need to pass the bypass instance - but we don't have it here
-    // So we'll use static trace_buffer that was already being used
-    memcpy(blocks[i].trace_buffer, trace_buffer, (MAX_PATH_LENGTH + 1) * sizeof(unsigned int));
+    // Use trace_buffer from parent
+    memcpy(blocks[i].trace_buffer, parent->trace_buffer, (MAX_PATH_LENGTH + 1) * sizeof(unsigned int));
     
     blocks[i].conf = pred->get_prediction(tid, -1);
 }
 
-sdbp_sampler::sdbp_sampler(int nsets, int assoc) {
+sdbp_sampler::sdbp_sampler(int nsets, int assoc, bypass* b) : parent(b) {
 #define GET_PARAM(name,var) { char *s = getenv (name); if (!s) {if (0) fprintf (stderr, "warning: parameter %s not found in environment, default is %d\n", name, var); } else { sscanf (s, "%d", &var); if (0) fprintf (stderr, "%s=%d\n", name, var); } }
     
-    GET_PARAM("DAN_PROMOTION_THRESHOLD", dan_promotion_threshold);
-    GET_PARAM("DAN_INIT_WEIGHT", dan_init_weight);
-    GET_PARAM("DAN_RRIP_PLACE_POSITION", dan_rrip_place_position);
-    GET_PARAM("DAN_USE_RRIP", dan_use_rrip);
-    GET_PARAM("DAN_THETA2", dan_theta2);
-    GET_PARAM("DAN_LEADERS", dan_leaders);
-    GET_PARAM("DAN_DT1", dan_dt1);
-    GET_PARAM("DAN_DT2", dan_dt2);
-    GET_PARAM("DAN_USE_PLRU", dan_use_plru);
-    GET_PARAM("DAN_COUNTER_WIDTH", dan_counter_width);
-    GET_PARAM("DAN_IGNORE_PREFETCH", dan_ignore_prefetch);
-    GET_PARAM("DAN_RECORD_TYPES", dan_record_types);
-    GET_PARAM("DAN_SAMPLER_ASSOC", dan_sampler_assoc);
-    GET_PARAM("DAN_THRESHOLD", dan_threshold);
-    GET_PARAM("DAN_BYPASS_THRESHOLD", dan_bypass_threshold);
-    GET_PARAM("DAN_THETA", dan_theta);
-    GET_PARAM("DAN_SAMPLERS", dan_samplers);
-    GET_PARAM("DAN_PREDICTOR_TABLES", dan_predictor_tables);
-    GET_PARAM("DAN_PREDICTOR_INDEX_BITS", dan_predictor_index_bits);
+    GET_PARAM("DAN_PROMOTION_THRESHOLD", parent->dan_promotion_threshold);
+    GET_PARAM("DAN_INIT_WEIGHT", parent->dan_init_weight);
+    GET_PARAM("DAN_RRIP_PLACE_POSITION", parent->dan_rrip_place_position);
+    GET_PARAM("DAN_USE_RRIP", parent->dan_use_rrip);
+    GET_PARAM("DAN_THETA2", parent->dan_theta2);
+    GET_PARAM("DAN_LEADERS", parent->dan_leaders);
+    GET_PARAM("DAN_DT1", parent->dan_dt1);
+    GET_PARAM("DAN_DT2", parent->dan_dt2);
+    GET_PARAM("DAN_USE_PLRU", parent->dan_use_plru);
+    GET_PARAM("DAN_COUNTER_WIDTH", parent->dan_counter_width);
+    GET_PARAM("DAN_IGNORE_PREFETCH", parent->dan_ignore_prefetch);
+    GET_PARAM("DAN_RECORD_TYPES", parent->dan_record_types);
+    GET_PARAM("DAN_SAMPLER_ASSOC", parent->dan_sampler_assoc);
+    GET_PARAM("DAN_THRESHOLD", parent->dan_threshold);
+    GET_PARAM("DAN_BYPASS_THRESHOLD", parent->dan_bypass_threshold);
+    GET_PARAM("DAN_THETA", parent->dan_theta);
+    GET_PARAM("DAN_SAMPLERS", parent->dan_samplers);
+    GET_PARAM("DAN_PREDICTOR_TABLES", parent->dan_predictor_tables);
+    GET_PARAM("DAN_PREDICTOR_INDEX_BITS", parent->dan_predictor_index_bits);
     
     char *s;
     s = getenv("DAN_PLACEMENT_VECTOR");
     if (s) {
-        sscanf(s, "[ %d %d %d %d %d %d", &plv[0][0], &plv[0][1], &plv[1][0], &plv[1][1], &plv[2][0], &plv[2][1]);
+        sscanf(s, "[ %d %d %d %d %d %d", &parent->plv[0][0], &parent->plv[0][1], &parent->plv[1][0], &parent->plv[1][1], &parent->plv[2][0], &parent->plv[2][1]);
     }
     s = getenv("DAN_SPECS");
     if (s) {
         FILE *f = fopen(s, "r");
         assert(f);
-        read_specs(f);
-        specs = input_specs;
+        parent->read_specs(f);
+        parent->specs = input_specs;
         fclose(f);
         printf("read specs from \"%s\"\n", s);
         fflush(stdout);
     }
     
-    dan_predictor_table_entries = 1 << dan_predictor_index_bits;
-    nsampler_sets = dan_samplers;
+    parent->dan_predictor_table_entries = 1 << parent->dan_predictor_index_bits;
+    nsampler_sets = parent->dan_samplers;
     
     if (nsampler_sets > nsets) {
         nsampler_sets = nsets;
@@ -788,30 +746,34 @@ sdbp_sampler::sdbp_sampler(int nsets, int assoc) {
         fflush(stderr);
     }
     
-    dan_counter_max = (1 << (dan_counter_width - 1)) - 1;
-    dan_counter_min = -(1 << (dan_counter_width - 1));
+    parent->dan_counter_max = (1 << (parent->dan_counter_width - 1)) - 1;
+    parent->dan_counter_min = -(1 << (parent->dan_counter_width - 1));
     fflush(stdout);
     
-    pred = new perceptron_predictor();
+    pred = std::make_unique<perceptron_predictor>(parent);
     
     assert(nsampler_sets >= 0);
     
-    sets = new sdbp_sampler_set[nsampler_sets];
-}
-
-sdbp_sampler::~sdbp_sampler() {
-    if (pred) delete pred;
-    if (sets) delete[] sets;
+    sets.resize(nsampler_sets);
+    int sampler_assoc = parent->dan_sampler_assoc;
+    for (auto& set : sets) {
+        set.blocks.resize(sampler_assoc);
+        for(int i = 0; i < sampler_assoc; i++) {
+            set.blocks[i].lru_stack_position = i;
+        }
+    }
 }
 
 // ==================== Perceptron predictor implementation ====================
 
-perceptron_predictor::perceptron_predictor(void) {
-    tables = new int*[dan_predictor_tables];
-    table_sizes = new int[dan_predictor_tables];
+perceptron_predictor::perceptron_predictor(bypass* b) : parent(b) {
+    tables.resize(parent->dan_predictor_tables);
+    table_sizes.resize(parent->dan_predictor_tables);
     
-    for (int i = 0; i < dan_predictor_tables; i++) {
+    for (int i = 0; i < parent->dan_predictor_tables; i++) {
         int table_entries;
+        feature_spec* specs = parent->specs;
+
         switch (specs[i].type) {
         case F_BIAS:
         case F_BURST:
@@ -819,63 +781,53 @@ perceptron_predictor::perceptron_predictor(void) {
         case F_INS:
             if (specs[i].xorpc == 0) table_entries = 2; 
             else if (specs[i].xorpc == 2) table_entries = 4; 
-            else table_entries = dan_predictor_table_entries;
+            else table_entries = parent->dan_predictor_table_entries;
             break;
         case F_OFF:
             if (specs[i].xorpc == false) table_entries = 1 << (specs[i].end - specs[i].begin); 
-            else table_entries = dan_predictor_table_entries;
+            else table_entries = parent->dan_predictor_table_entries;
             break;
         default:
-            table_entries = dan_predictor_table_entries;
+            table_entries = parent->dan_predictor_table_entries;
         }
         table_sizes[i] = table_entries;
-        tables[i] = new int[table_entries];
-        for (int j = 0; j < table_entries; j++) tables[i][j] = dan_init_weight;
-        if (verbose) printf("@table %d: %d $\\times$ %d = %d bits\n", i, 6, table_entries, 6 * table_entries);
-        total_bits += 6 * table_entries;
-    }
-}
+        tables[i].resize(table_entries, parent->dan_init_weight);
 
-perceptron_predictor::~perceptron_predictor() {
-    if (tables) {
-        for (int i = 0; i < dan_predictor_tables; i++) {
-            if (tables[i]) delete[] tables[i];
-        }
-        delete[] tables;
+        if (verbose) printf("@table %d: %d $\\times$ %d = %d bits\n", i, 6, table_entries, 6 * table_entries);
+        // total_bits += 6 * table_entries; // total_bits is local in bypass constructor
     }
-    if (table_sizes) delete[] table_sizes;
 }
 
 void perceptron_predictor::block_is_dead(uint32_t tid, sdbp_sampler_entry *block, 
                                          unsigned int *trace_buffer_param, bool d, int conf, int pos) {
-    bool prediction = conf >= dan_threshold;
+    bool prediction = conf >= parent->dan_threshold;
     bool correct = prediction == d;
     
-    printf("what is d %d\n", d);
+    // printf("what is d %d\n", d);
     
     bool do_train = false;
     if (conf < 0) {
-        if (conf > -dan_theta2) do_train = true;
+        if (conf > -parent->dan_theta2) do_train = true;
     } else {
-        if (conf < dan_theta) do_train = true;
+        if (conf < parent->dan_theta) do_train = true;
     }
     if (!correct) do_train = true;
     if (!do_train) return;
     
-    for (int i = 0; i < dan_predictor_tables; i++) {
-        if (d) if (specs[i].assoc != pos) continue;
-        if (!d) if (specs[i].assoc <= pos) continue;
+    for (int i = 0; i < parent->dan_predictor_tables; i++) {
+        if (d) if (parent->specs[i].assoc != pos) continue;
+        if (!d) if (parent->specs[i].assoc <= pos) continue;
         
         int *c = &tables[i][trace_buffer_param[i] % table_sizes[i]];
         
         if (d) {
-            if (*c < dan_counter_max) { 
+            if (*c < parent->dan_counter_max) { 
                 (*c)++;
-                printf("increased counter for table %d\n", i);
+                // printf("increased counter for table %d\n", i);
             }
         } else {
-            if (*c > dan_counter_min) {
-                printf("decreased counter for table %d\n", i);
+            if (*c > parent->dan_counter_min) {
+                // printf("decreased counter for table %d\n", i);
                 (*c)--;
             }
         }
@@ -885,8 +837,8 @@ void perceptron_predictor::block_is_dead(uint32_t tid, sdbp_sampler_entry *block
 int perceptron_predictor::get_prediction(uint32_t tid, int set) {
     int conf = 0;
     
-    for (int i = 0; i < dan_predictor_tables; i++) {
-        int val = tables[i][trace_buffer[i] % table_sizes[i]];
+    for (int i = 0; i < parent->dan_predictor_tables; i++) {
+        int val = tables[i][parent->trace_buffer[i] % table_sizes[i]];
         conf += val;
     }
     
